@@ -1,24 +1,21 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import {
   collection, query, where, onSnapshot,
-  addDoc, serverTimestamp, doc, setDoc, getDoc, getDocs, orderBy
+  serverTimestamp, doc, setDoc, getDoc, getDocs, orderBy
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import ChatRoom from './ChatRoom'
 import './MainApp.css'
 
 export default function MainApp({ user }) {
-  const [contacts, setContacts] = useState([])
   const [chats, setChats] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
-  const [activeTab, setActiveTab] = useState('chats')
   const [showProfile, setShowProfile] = useState(false)
-  const navigate = useNavigate()
+  const [activeChatId, setActiveChatId] = useState(null)
+  const [showChat, setShowChat] = useState(false)
 
-  // Simpan user ke Firestore saat pertama login
   useEffect(() => {
     const saveUser = async () => {
       await setDoc(doc(db, 'users', user.uid), {
@@ -34,7 +31,6 @@ export default function MainApp({ user }) {
     saveUser()
   }, [user])
 
-  // Load daftar chat
   useEffect(() => {
     const q = query(
       collection(db, 'chats'),
@@ -50,36 +46,26 @@ export default function MainApp({ user }) {
           const userDoc = await getDoc(doc(db, 'users', otherId))
           if (userDoc.exists()) otherUser = userDoc.data()
         }
-        return {
-          id: d.id,
-          ...data,
-          otherUser,
-          otherId
-        }
+        return { id: d.id, ...data, otherUser, otherId }
       }))
       setChats(chatList)
     })
     return () => unsub()
   }, [user.uid])
 
-  // Cari user berdasarkan email atau nama
   const searchUsers = async (q) => {
     if (!q.trim()) { setSearchResults([]); return }
-    const usersRef = collection(db, 'users')
-    const snap = await getDocs(usersRef)
+    const snap = await getDocs(collection(db, 'users'))
     const results = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(u =>
         u.uid !== user.uid &&
-        (
-          u.displayName?.toLowerCase().includes(q.toLowerCase()) ||
-          u.email?.toLowerCase().includes(q.toLowerCase())
-        )
+        (u.displayName?.toLowerCase().includes(q.toLowerCase()) ||
+         u.email?.toLowerCase().includes(q.toLowerCase()))
       )
     setSearchResults(results)
   }
 
-  // Buka atau buat chat baru dengan user lain
   const openChat = async (otherUser) => {
     const members = [user.uid, otherUser.uid].sort()
     const chatId = members.join('_')
@@ -95,15 +81,19 @@ export default function MainApp({ user }) {
     }
     setSearchQuery('')
     setSearchResults([])
-    navigate(`/chat/${chatId}`)
+    setActiveChatId(chatId)
+    setShowChat(true)
   }
 
-const openExistingChat = (chatId) => {
-  navigate(`/chat/${chatId}`)
-  if (window.innerWidth <= 768) {
-    document.querySelector('.sidebar').classList.add('hidden')
+  const openExistingChat = (chatId) => {
+    setActiveChatId(chatId)
+    setShowChat(true)
   }
-}
+
+  const goBack = () => {
+    setShowChat(false)
+    setActiveChatId(null)
+  }
 
   const handleLogout = async () => {
     await signOut(auth)
@@ -126,7 +116,7 @@ const openExistingChat = (chatId) => {
   return (
     <div className="main-layout">
       {/* SIDEBAR */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${showChat ? 'hidden' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
@@ -197,9 +187,7 @@ const openExistingChat = (chatId) => {
         )}
 
         <div className="chat-tabs">
-          <button className={activeTab === 'chats' ? 'tab active' : 'tab'} onClick={() => setActiveTab('chats')}>
-            Pesan
-          </button>
+          <button className="tab active">Pesan</button>
         </div>
 
         <div className="chat-list">
@@ -211,11 +199,7 @@ const openExistingChat = (chatId) => {
             </div>
           ) : (
             chats.map(chat => (
-              <div
-                key={chat.id}
-                className="chat-item"
-                onClick={() => openExistingChat(chat.id)}
-              >
+              <div key={chat.id} className="chat-item" onClick={() => openExistingChat(chat.id)}>
                 <div className="chat-avatar">{avatar(chat.otherUser)}</div>
                 <div className="chat-info">
                   <span className="chat-name">{chat.otherUser?.displayName || 'Pengguna'}</span>
@@ -231,22 +215,21 @@ const openExistingChat = (chatId) => {
       </aside>
 
       {/* AREA CHAT */}
-      <main className="chat-area">
-        <Routes>
-          <Route path="/" element={
-            <div className="chat-welcome">
-              <div className="welcome-icon">
-                <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
-                  <circle cx="24" cy="24" r="22" stroke="#00d9ff" strokeWidth="1.5" opacity="0.5"/>
-                  <path d="M14 24C14 18.477 18.477 14 24 14C29.523 14 34 18.477 34 24C34 26.5 33.1 28.8 31.6 30.6L34 36L28 34C26.8 34.6 25.4 35 24 35C18.477 35 14 30.523 14 25" stroke="#00d9ff" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                </svg>
-              </div>
-              <h2>Selamat datang di ChatApp</h2>
-              <p>Pilih percakapan atau cari pengguna baru untuk mulai chat lintas negara</p>
+      <main className={`chat-area ${!showChat ? 'hidden-mobile' : ''}`}>
+        {activeChatId ? (
+          <ChatRoom currentUser={user} chatId={activeChatId} onBack={goBack} />
+        ) : (
+          <div className="chat-welcome">
+            <div className="welcome-icon">
+              <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="22" stroke="#00d9ff" strokeWidth="1.5" opacity="0.5"/>
+                <path d="M14 24C14 18.477 18.477 14 24 14C29.523 14 34 18.477 34 24C34 26.5 33.1 28.8 31.6 30.6L34 36L28 34C26.8 34.6 25.4 35 24 35C18.477 35 14 30.523 14 25" stroke="#00d9ff" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+              </svg>
             </div>
-          } />
-          <Route path="/chat/:chatId" element={<ChatRoom currentUser={user} />} />
-        </Routes>
+            <h2>Selamat datang di ChatApp</h2>
+            <p>Pilih percakapan atau cari pengguna baru untuk mulai chat lintas negara</p>
+          </div>
+        )}
       </main>
     </div>
   )

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, serverTimestamp, doc, getDoc, updateDoc
@@ -7,9 +6,7 @@ import {
 import { db } from '../firebase'
 import './ChatRoom.css'
 
-export default function ChatRoom({ currentUser }) {
-  const { chatId } = useParams()
-  const navigate = useNavigate()
+export default function ChatRoom({ currentUser, chatId, onBack }) {
   const [messages, setMessages] = useState([])
   const [newMsg, setNewMsg] = useState('')
   const [otherUser, setOtherUser] = useState(null)
@@ -27,7 +24,7 @@ export default function ChatRoom({ currentUser }) {
       setLoading(true)
       try {
         const chatDoc = await getDoc(doc(db, 'chats', chatId))
-        if (!chatDoc.exists()) { navigate('/'); return }
+        if (!chatDoc.exists()) { onBack ? onBack() : window.history.back(); return }
         const data = chatDoc.data()
         const otherId = data.members.find(id => id !== currentUser.uid)
         if (otherId) {
@@ -119,7 +116,7 @@ export default function ChatRoom({ currentUser }) {
     <div className="chatroom">
       {/* HEADER */}
       <div className="chatroom-header">
-        <button className="btn-back-chat" onClick={() => navigate('/')}>
+        <button className="btn-back-chat" onClick={() => onBack ? onBack() : window.history.back()}>
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
           </svg>
