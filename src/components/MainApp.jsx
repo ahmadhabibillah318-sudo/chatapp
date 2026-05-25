@@ -98,9 +98,12 @@ export default function MainApp({ user }) {
     navigate(`/chat/${chatId}`)
   }
 
-  const openExistingChat = (chatId) => {
-    navigate(`/chat/${chatId}`)
+const openExistingChat = (chatId) => {
+  navigate(`/chat/${chatId}`)
+  if (window.innerWidth <= 768) {
+    document.querySelector('.sidebar').classList.add('hidden')
   }
+}
 
   const handleLogout = async () => {
     await signOut(auth)
